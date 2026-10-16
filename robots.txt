@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://harissamustafa-a11y.github.io/kebbs-wheels/sitemap.xml
