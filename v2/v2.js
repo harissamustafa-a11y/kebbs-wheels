@@ -92,22 +92,50 @@
   new IntersectionObserver(([e]) => { if (reduce.matches) nav.classList.toggle('is-solid', !e.isIntersecting); },
     { rootMargin: '-80px 0px 0px 0px' }).observe(walk);
 
-  // Reviews: rotate every 6s while on screen; pause on hover or keyboard focus and when
-  // the tab is hidden. Dots switch directly. No auto-rotation under reduced motion.
+  // Reviews: rotate every 7s while on screen; pause on hover, keyboard focus, an
+  // expanded review, or a hidden tab. One dot per review. Long reviews are clamped with
+  // a "Read full review" toggle so every card stays a similar size. No auto-rotation
+  // under reduced motion.
   const stage = document.getElementById('tst-stage');
   const cards = [...stage.querySelectorAll('.tcard')];
-  const dots = [...document.querySelectorAll('.tst__dot')];
-  let idx = 0, timer = null, onScreen = false, held = false;
+  const dotWrap = document.querySelector('.tst__dots');
+  const dots = cards.map((c, k) => {
+    const d = document.createElement('button');
+    d.type = 'button'; d.className = 'tst__dot';
+    d.setAttribute('aria-label', `Review ${k + 1} of ${cards.length}`);
+    d.append(document.createElement('span'));
+    dotWrap.append(d);
+    return d;
+  });
+  let idx = 0, timer = null, onScreen = false, held = false, open = false;
+  const collapse = (c) => {
+    const tq = c.querySelector('.tq'), btn = c.querySelector('.tmore');
+    tq.classList.remove('is-clamped');
+    // Measure the text itself: cards stretch to the tallest one, so the box height is no guide.
+    const textH = tq.lastElementChild.getBoundingClientRect().bottom - tq.firstElementChild.getBoundingClientRect().top;
+    const long = textH > parseFloat(getComputedStyle(tq).lineHeight) * 7.5;
+    tq.classList.toggle('is-clamped', long);
+    btn.hidden = !long; btn.textContent = 'Read full review'; btn.setAttribute('aria-expanded', 'false');
+  };
   const show = (i, user) => {
     idx = (i + cards.length) % cards.length;
-    cards.forEach((c, k) => { c.classList.toggle('is-active', k === idx); c.setAttribute('aria-hidden', String(k !== idx)); });
+    open = false;
+    cards.forEach((c, k) => { c.classList.toggle('is-active', k === idx); c.setAttribute('aria-hidden', String(k !== idx)); c.inert = k !== idx; collapse(c); });
     dots.forEach((d, k) => d.setAttribute('aria-current', String(k === idx)));
     stage.setAttribute('aria-live', user ? 'polite' : 'off');
   };
   const tick = () => {
     clearInterval(timer); timer = null;
-    if (!reduce.matches && onScreen && !held && !document.hidden && cards.length > 1) timer = setInterval(() => show(idx + 1, false), 6000);
+    if (!reduce.matches && onScreen && !held && !open && !document.hidden && cards.length > 1) timer = setInterval(() => show(idx + 1, false), 7000);
   };
+  cards.forEach((c) => c.querySelector('.tmore').addEventListener('click', (ev) => {
+    const tq = c.querySelector('.tq');
+    open = tq.classList.contains('is-clamped');
+    tq.classList.toggle('is-clamped', !open);
+    ev.currentTarget.textContent = open ? 'Show less' : 'Read full review';
+    ev.currentTarget.setAttribute('aria-expanded', String(open));
+    tick();
+  }));
   dots.forEach((d, k) => d.addEventListener('click', () => { show(k, true); tick(); }));
   stage.addEventListener('pointerenter', () => { held = true; tick(); });
   stage.addEventListener('pointerleave', () => { held = false; tick(); });
@@ -115,6 +143,7 @@
   stage.parentElement.addEventListener('focusout', () => { held = false; tick(); });
   document.addEventListener('visibilitychange', tick);
   reduce.addEventListener('change', tick);
+  window.addEventListener('resize', () => { if (!open) cards.forEach(collapse); }, { passive: true });
   new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; tick(); }, { threshold: 0.3 }).observe(stage);
   show(0, false);
 
